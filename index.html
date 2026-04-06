@@ -1,0 +1,935 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TYPE MILKA TYPE</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="wordlist.js"></script>
+    <script src="trigram.js"></script>
+    <style>
+      :root {
+        --bg: #323437;
+        --main: #e2b714;
+        --caret: #e2b714;
+        --sub: #646669;
+        --text: #d1d0c5;
+        --error: #ca4754;
+        --font: "Courier New", Courier, monospace;
+      }
+
+      [data-theme="light"] {
+        --bg: #ffffff;
+        --main: #007aff;
+        --caret: #007aff;
+        --sub: #999;
+        --text: #333;
+        --error: #ff3b30;
+      }
+
+      [data-theme="nord"] {
+        --bg: #2e3440;
+        --main: #88c0d0;
+        --caret: #88c0d0;
+        --sub: #4c566a;
+        --text: #d8dee9;
+        --error: #bf616a;
+      }
+
+      * {
+        box-sizing: border-box;
+        transition:
+          background 0.3s,
+          color 0.3s;
+      }
+
+      body {
+        background-color: var(--bg);
+        color: var(--text);
+        font-family: var(--font);
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        overflow-x: hidden;
+      }
+
+      #app {
+        width: 100%;
+        max-width: 1000px;
+        padding: 2rem;
+        position: relative;
+      }
+
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+        color: var(--sub);
+      }
+
+      .config-row {
+        display: flex;
+        gap: 1.5rem;
+        font-size: 0.9rem;
+        flex-wrap: wrap;
+      }
+
+      .config-item {
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .config-item:hover,
+      .config-item.active {
+        color: var(--main);
+      }
+
+      #typing-container {
+        position: relative;
+        font-size: 1.8rem;
+        line-height: 1.5;
+        min-height: 120px;
+        word-break: break-all;
+        user-select: none;
+      }
+
+      #words-wrapper {
+        color: var(--sub);
+        position: relative;
+        z-index: 1;
+      }
+
+      .char {
+        position: relative;
+      }
+      .char.correct {
+        color: var(--text);
+      }
+      .char.incorrect {
+        color: var(--error);
+        border-bottom: 2px solid var(--error);
+      }
+
+      #caret {
+        position: absolute;
+        width: 2px;
+        height: 1.8rem;
+        background: var(--caret);
+        z-index: 2;
+        transition: all 0.1s linear;
+        box-shadow: 0 0 8px var(--caret);
+      }
+
+      #ghost-caret {
+        position: absolute;
+        width: 2px;
+        height: 1.8rem;
+        background: rgba(226, 183, 20, 0.3);
+        z-index: 0;
+        display: none;
+      }
+
+      #stats-bar {
+        display: flex;
+        gap: 2rem;
+        margin-top: 1rem;
+        color: var(--main);
+        font-weight: bold;
+      }
+
+      #hidden-input {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      /* Virtual Keyboard Selector Styles */
+      #keyboard-selector {
+        margin-top: 3rem;
+        padding: 1.5rem;
+        background: rgba(0, 0, 0, 0.15);
+        border-radius: 12px;
+        width: 100%;
+      }
+
+      .keyboard-layout {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        align-items: center;
+        margin-bottom: 1.5rem;
+      }
+
+      .keyboard-row {
+        display: flex;
+        gap: 6px;
+      }
+
+      .key-btn {
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--sub);
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        transition: all 0.2s;
+        background: transparent;
+        color: var(--sub);
+      }
+
+      .key-btn:hover {
+        border-color: var(--main);
+        color: var(--main);
+      }
+      .key-btn.selected {
+        background: var(--main);
+        color: var(--bg);
+        border-color: var(--main);
+      }
+
+      .quick-select-row {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        margin-bottom: 1rem;
+      }
+
+      .quick-btn {
+        font-size: 0.7rem;
+        padding: 4px 8px;
+        background: transparent;
+        border: 1px solid var(--sub);
+        color: var(--sub);
+        border-radius: 4px;
+        cursor: pointer;
+      }
+
+      .quick-btn:hover {
+        border-color: var(--main);
+        color: var(--main);
+      }
+
+      /* Results Modal */
+      #results-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.9);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 100;
+      }
+
+      .results-card {
+        background: var(--bg);
+        padding: 2.5rem;
+        border-radius: 12px;
+        width: 90%;
+        max-width: 850px;
+        border: 1px solid var(--sub);
+      }
+
+      #chart-container {
+        height: 200px;
+        margin-bottom: 2rem;
+      }
+
+      .heatmap {
+        display: grid;
+        grid-template-columns: repeat(10, 1fr);
+        gap: 6px;
+        margin-top: 1rem;
+        max-width: 500px;
+        margin-left: auto;
+        margin-right: auto;
+      }
+
+      .heat-key {
+        height: 35px;
+        background: #444;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+      }
+
+      button.primary {
+        background: var(--main);
+        color: var(--bg);
+        border: none;
+        padding: 0.8rem 1.8rem;
+        border-radius: 6px;
+        cursor: pointer;
+        font-family: inherit;
+        font-weight: bold;
+        font-size: 1rem;
+      }
+
+      .focus-mode header,
+      .focus-mode #stats-bar,
+      .focus-mode #keyboard-selector,
+      .focus-mode footer {
+        opacity: 0.02;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <div
+          class="logo"
+          style="font-weight: bold; color: var(--main); letter-spacing: 2px"
+        >
+          TYPE MILKA TYPE
+        </div>
+        <div class="config-row">
+          <div class="config-item" id="mode-toggle" onclick="toggleMode()">
+            <i data-lucide="clock"></i> <span id="mode-label">Timed (60s)</span>
+          </div>
+          <div class="config-item" id="sound-toggle" onclick="toggleSound()">
+            <i data-lucide="volume-2"></i> Sound
+          </div>
+          <div class="config-item" id="focus-toggle" onclick="toggleFocus()">
+            <i data-lucide="eye-off"></i> Focus
+          </div>
+          <div class="config-item" onclick="cycleTheme()">
+            <i data-lucide="palette"></i> Theme
+          </div>
+        </div>
+      </header>
+
+      <div id="stats-bar">
+        <div id="timer-display">00s</div>
+        <div id="wpm-display">WPM: 0</div>
+        <div id="acc-display">ACC: 100%</div>
+      </div>
+
+      <div id="typing-container">
+        <div id="caret"></div>
+        <div id="ghost-caret"></div>
+        <div id="words-wrapper"></div>
+      </div>
+
+      <input type="text" id="hidden-input" autocomplete="off" autofocus />
+
+      <div id="keyboard-selector">
+        <div class="quick-select-row">
+          <button class="quick-btn" onclick="quickSelect('home')">
+            Home Row
+          </button>
+          <button class="quick-btn" onclick="quickSelect('all')">
+            All Letters
+          </button>
+          <button class="quick-btn" onclick="quickSelect('numbers')">
+            Numbers
+          </button>
+          <button class="quick-btn" onclick="quickSelect('reset')">
+            Clear All
+          </button>
+        </div>
+        <div class="keyboard-layout" id="keyboard-grid">
+          <!-- Rows injected by JS -->
+        </div>
+        <div style="text-align: center">
+          <button class="primary" onclick="resetTraining()">
+            APPLY & START TRAINING
+          </button>
+        </div>
+      </div>
+
+      <footer
+        style="
+          margin-top: 3rem;
+          color: var(--sub);
+          font-size: 0.8rem;
+          text-align: center;
+        "
+      >
+        <i
+          data-lucide="keyboard"
+          style="width: 14px; vertical-align: middle"
+        ></i>
+        Press <span style="color: var(--main)">Tab</span> to restart •
+        <span style="color: var(--main)">Esc</span> to pause
+      </footer>
+    </div>
+
+    <div id="results-overlay">
+      <div class="results-card">
+        <h2 style="color: var(--main); margin-top: 0">Session Report</h2>
+        <div id="chart-container">
+          <canvas id="performanceChart"></canvas>
+        </div>
+        <div
+          style="
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 2rem;
+            text-align: center;
+          "
+        >
+          <div>
+            <div style="color: var(--sub); font-size: 0.8rem">WPM</div>
+            <span id="res-wpm" style="font-size: 2rem; color: var(--main)"
+              >0</span
+            >
+          </div>
+          <div>
+            <div style="color: var(--sub); font-size: 0.8rem">ACCURACY</div>
+            <span id="res-acc" style="font-size: 2rem; color: var(--text)"
+              >0</span
+            >%
+          </div>
+          <div>
+            <div style="color: var(--sub); font-size: 0.8rem">
+              PERSONAL BEST
+            </div>
+            <span id="res-pb" style="font-size: 2rem; color: var(--sub)"
+              >0</span
+            >
+          </div>
+        </div>
+        <div
+          style="
+            color: var(--sub);
+            font-size: 0.8rem;
+            text-align: center;
+            margin-bottom: 0.5rem;
+          "
+        >
+          HEATMAP (ERRORS)
+        </div>
+        <div class="heatmap" id="results-heatmap"></div>
+        <div style="margin-top: 2.5rem; text-align: center">
+          <button class="primary" onclick="closeResults()">CONTINUE</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const KEYBOARD_ROWS = [
+        ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
+        ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
+        ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
+        ["z", "x", "c", "v", "b", "n", "m", ",", ".", "?"],
+      ];
+
+      let state = {
+        theme: "dark",
+        mode: "timed",
+        duration: 60,
+        sound: true,
+        focus: false,
+        activeKeys: "abcdefghijklmnopqrstuvwxyz".split(""),
+        isActive: false,
+        isPaused: false,
+        startTime: null,
+        lastInteraction: Date.now(),
+        typedChars: "",
+        targetText: "",
+        wpmHistory: [],
+        errors: {},
+        ghostWpm: 0,
+        mistakeReplay: [],
+      };
+
+      state.pauseStart = null;
+      state.totalPausedTime = 0;
+
+      let AudioCtx;
+      function playClick() {
+        if (!state.sound) return;
+        if (!AudioCtx)
+          AudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = AudioCtx.createOscillator();
+        const gain = AudioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(AudioCtx.destination);
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(
+          150 + Math.random() * 40,
+          AudioCtx.currentTime,
+        );
+        gain.gain.setValueAtTime(0.08, AudioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(
+          0.01,
+          AudioCtx.currentTime + 0.1,
+        );
+        osc.start();
+        osc.stop(AudioCtx.currentTime + 0.1);
+      }
+
+      function generateText() {
+        let result = [];
+        let validWords = getValidWords();
+
+        for (let i = 0; i < 60; i++) {
+          if (validWords.length > 0 && Math.random() < 0.7) {
+            // use real words 70% of time
+            result.push(
+              validWords[Math.floor(Math.random() * validWords.length)],
+            );
+          } else {
+            // generate trigram word
+            result.push(generateWordFromTrigram());
+          }
+        }
+
+        return result.join(" ");
+      }
+
+      const input = document.getElementById("hidden-input");
+      const wordsWrapper = document.getElementById("words-wrapper");
+      const caret = document.getElementById("caret");
+      const ghostCaret = document.getElementById("ghost-caret");
+
+      function init() {
+        loadSettings();
+        renderKeyboard();
+        resetTraining();
+        if (typeof lucide !== "undefined") lucide.createIcons();
+
+        window.addEventListener("keydown", (e) => {
+          if (e.key === "Tab") {
+            e.preventDefault();
+            resetTraining();
+            return;
+          }
+          if (e.key === "Escape") {
+            togglePause();
+            return;
+          } else {
+            if (state.isPaused) {
+              togglePause();
+            }
+          }
+
+          if (
+            !document.getElementById("results-overlay").style.display ||
+            document.getElementById("results-overlay").style.display === "none"
+          ) {
+            input.focus();
+          }
+        });
+        input.addEventListener("input", handleInput);
+        setInterval(tick, 1000);
+      }
+
+      function renderKeyboard() {
+        const grid = document.getElementById("keyboard-grid");
+        grid.innerHTML = KEYBOARD_ROWS.map(
+          (row) => `
+            <div class="keyboard-row">
+                ${row
+                  .map(
+                    (key) => `
+                    <div class="key-btn ${state.activeKeys.includes(key) ? "selected" : ""}" 
+                         data-key="${key}" onclick="toggleKey('${key}')">
+                        ${key === "," ? "<" : key === "." ? ">" : key}
+                    </div>
+                `,
+                  )
+                  .join("")}
+            </div>
+        `,
+        ).join("");
+      }
+
+      function toggleKey(key) {
+        if (state.activeKeys.includes(key)) {
+          state.activeKeys = state.activeKeys.filter((k) => k !== key);
+        } else {
+          state.activeKeys.push(key);
+        }
+        if (state.activeKeys.length === 0) state.activeKeys = ["a"];
+        saveSettings();
+        renderKeyboard();
+      }
+
+      function quickSelect(type) {
+        if (type === "home") state.activeKeys = "asdfghjkl".split("");
+        else if (type === "all")
+          state.activeKeys = "abcdefghijklmnopqrstuvwxyz".split("");
+        else if (type === "numbers") state.activeKeys = "1234567890".split("");
+        else if (type === "reset") state.activeKeys = [];
+
+        if (state.activeKeys.length === 0 && type !== "reset")
+          state.activeKeys = ["a"];
+        renderKeyboard();
+        saveSettings();
+      }
+
+      function resetTraining() {
+        let pbs = JSON.parse(localStorage.getItem("protype-pbs") || "{}");
+        const modeKey = `${state.mode}-${state.activeKeys.length}`;
+        state.ghostWpm = pbs[modeKey] || 0;
+        state.isActive = false;
+        state.isPaused = false;
+        state.startTime = null;
+        state.typedChars = "";
+        state.wpmHistory = [];
+        state.errors = {};
+        state.targetText = generateText();
+
+        wordsWrapper.innerHTML = state.targetText
+          .split("")
+          .map((char, i) => `<span class="char" id="char-${i}">${char}</span>`)
+          .join("");
+        updateCaret();
+        updateStats();
+
+        document.getElementById("timer-display").innerText =
+          state.mode === "timed" ? `${state.duration}s` : "00s";
+        input.value = "";
+        input.focus();
+      }
+
+      function handleInput() {
+        if (state.isPaused) return;
+        if (!state.isActive) {
+          state.isActive = true;
+          state.startTime = Date.now();
+        }
+        state.lastInteraction = Date.now();
+        state.typedChars = input.value;
+        playClick();
+
+        const chars = document.querySelectorAll(".char");
+        chars.forEach((span, i) => {
+          if (i < state.typedChars.length) {
+            const isCorrect = state.typedChars[i] === state.targetText[i];
+            span.className = `char ${isCorrect ? "correct" : "incorrect"}`;
+            if (!isCorrect)
+              state.errors[state.targetText[i]] =
+                (state.errors[state.targetText[i]] || 0) + 1;
+          } else span.className = "char";
+        });
+        updateCaret();
+        updateStats();
+        if (state.typedChars.length >= state.targetText.length) finishTest();
+      }
+
+      function updateCaret() {
+        const index = state.typedChars.length;
+        const charEl =
+          document.getElementById(`char-${index}`) ||
+          document.getElementById(`char-${index - 1}`);
+        if (!charEl) return;
+        const rect = charEl.getBoundingClientRect();
+        const containerRect = document
+          .getElementById("typing-container")
+          .getBoundingClientRect();
+        let left = rect.left - containerRect.left;
+        if (state.typedChars.length >= state.targetText.length)
+          left += rect.width;
+        caret.style.left = `${left}px`;
+        caret.style.top = `${rect.top - containerRect.top}px`;
+      }
+
+      function tick() {
+        if (!state.isActive || state.isPaused) return;
+        if (!state.isPaused && Date.now() - state.lastInteraction > 4000) {
+          togglePause();
+          return;
+        }
+
+        const elapsed = (Date.now() - state.startTime) / 1000;
+        if (state.mode === "timed") {
+          const remaining = Math.max(0, state.duration - elapsed);
+          document.getElementById("timer-display").innerText =
+            `${Math.ceil(remaining)}s`;
+          if (remaining <= 0) finishTest();
+        } else
+          document.getElementById("timer-display").innerText =
+            `${Math.floor(elapsed)}s`;
+
+        // ⛔ ignore first 2 seconds
+        if (elapsed >= 1) {
+          state.wpmHistory.push(calculateWPM());
+        }
+        updateStats();
+        if (state.ghostWpm > 0) updateGhostCaret(elapsed);
+      }
+
+      function updateGhostCaret(elapsed) {
+        if (!state.ghostWpm) return;
+
+        const ghostChars = state.ghostWpm * 5 * (elapsed / 60);
+        const index = Math.min(
+          Math.floor(ghostChars),
+          state.targetText.length - 1,
+        );
+
+        const charEl = document.getElementById(`char-${index}`);
+        if (!charEl) return;
+
+        const rect = charEl.getBoundingClientRect();
+        const containerRect = document
+          .getElementById("typing-container")
+          .getBoundingClientRect();
+
+        ghostCaret.style.display = "block";
+        ghostCaret.style.left = `${rect.left - containerRect.left}px`;
+        ghostCaret.style.top = `${rect.top - containerRect.top}px`;
+      }
+
+      function calculateWPM() {
+        if (!state.startTime) return 0;
+
+        const elapsedMinutes =
+          (Date.now() - state.startTime - state.totalPausedTime) / 60000;
+        if (elapsedMinutes <= 0) return 0;
+
+        const correct = state.typedChars
+          .split("")
+          .filter((c, i) => c === state.targetText[i]).length;
+
+        return Math.round(correct / 5 / elapsedMinutes);
+      }
+
+      function calculateAccuracy() {
+        if (state.typedChars.length === 0) return 100;
+        const correct = state.typedChars
+          .split("")
+          .filter((c, i) => c === state.targetText[i]).length;
+        return Math.round((correct / state.typedChars.length) * 100);
+      }
+
+      function updateStats() {
+        document.getElementById("wpm-display").innerText =
+          `WPM: ${calculateWPM()}`;
+        document.getElementById("acc-display").innerText =
+          `ACC: ${calculateAccuracy()}%`;
+      }
+
+      function toggleMode() {
+        state.mode = state.mode === "timed" ? "unlimited" : "timed";
+        document.getElementById("mode-label").innerText =
+          state.mode === "timed" ? "Timed (60s)" : "Unlimited";
+        saveSettings();
+        resetTraining();
+      }
+
+      function toggleSound() {
+        state.sound = !state.sound;
+        document
+          .getElementById("sound-toggle")
+          .classList.toggle("active", state.sound);
+        saveSettings();
+      }
+      function toggleFocus() {
+        state.focus = !state.focus;
+        document.body.classList.toggle("focus-mode", state.focus);
+        document
+          .getElementById("focus-toggle")
+          .classList.toggle("active", state.focus);
+        saveSettings();
+      }
+      function cycleTheme() {
+        const themes = ["dark", "light", "nord"];
+        state.theme = themes[(themes.indexOf(state.theme) + 1) % themes.length];
+        document.body.setAttribute("data-theme", state.theme);
+        saveSettings();
+      }
+      function togglePause() {
+        if (!state.isActive) return;
+
+        state.isPaused = !state.isPaused;
+
+        if (state.isPaused) {
+          state.pauseStart = Date.now();
+        } else {
+          state.totalPausedTime += Date.now() - state.pauseStart;
+          state.pauseStart = null;
+        }
+      }
+
+      let myChart;
+      function finishTest() {
+        state.isActive = false;
+        const finalWpm = calculateWPM();
+        const finalAcc = calculateAccuracy();
+        let pbs = JSON.parse(localStorage.getItem("protype-pbs") || "{}");
+        const modeKey = `${state.mode}-${state.activeKeys.length}`;
+        pbs[modeKey] = Math.max(pbs[modeKey] || 0, finalWpm);
+        localStorage.setItem("protype-pbs", JSON.stringify(pbs));
+        state.ghostWpm = pbs[modeKey];
+
+        state.mistakeReplay = state.targetText.split(" ").filter((word, i) => {
+          const startIdx =
+            state.targetText.split(" ").slice(0, i).join(" ").length +
+            (i > 0 ? 1 : 0);
+          return (
+            state.typedChars.slice(startIdx, startIdx + word.length) !== word
+          );
+        });
+
+        document.getElementById("results-overlay").style.display = "flex";
+        document.getElementById("res-wpm").innerText = finalWpm;
+        document.getElementById("res-acc").innerText = finalAcc;
+        document.getElementById("res-pb").innerText = pbs[modeKey];
+
+        const ctx = document
+          .getElementById("performanceChart")
+          .getContext("2d");
+        if (myChart) myChart.destroy();
+        myChart = new Chart(ctx, {
+          type: "line",
+          data: {
+            labels: state.wpmHistory.map((_, i) => i + 1),
+            datasets: [
+              {
+                label: "WPM",
+                data: state.wpmHistory,
+                borderColor: "#e2b714",
+                tension: 0.3,
+                fill: true,
+                backgroundColor: "rgba(226, 183, 20, 0.05)",
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: { x: { display: false }, y: { beginAtZero: true } },
+            plugins: { legend: { display: false } },
+          },
+        });
+
+        const heatmap = document.getElementById("results-heatmap");
+        const keys = "qwertyuiopasdfghjklzxcvbnm".split("");
+        heatmap.innerHTML = keys
+          .map((k) => {
+            const errCount = state.errors[k] || 0;
+            const color =
+              errCount > 0
+                ? `rgb(${Math.min(errCount * 60 + 50, 255)}, 60, 60)`
+                : "#222";
+            return `<div class="heat-key" style="background:${color}">${k}</div>`;
+          })
+          .join("");
+      }
+
+      function closeResults() {
+        document.getElementById("results-overlay").style.display = "none";
+        resetTraining();
+      }
+      function saveSettings() {
+        localStorage.setItem(
+          "protype-settings",
+          JSON.stringify({
+            theme: state.theme,
+            mode: state.mode,
+            sound: state.sound,
+            focus: state.focus,
+            activeKeys: state.activeKeys,
+          }),
+        );
+      }
+      function loadSettings() {
+        const saved = JSON.parse(localStorage.getItem("protype-settings"));
+        if (saved) {
+          Object.assign(state, saved);
+          document.body.setAttribute("data-theme", state.theme);
+          document.body.classList.toggle("focus-mode", state.focus);
+          document
+            .getElementById("sound-toggle")
+            .classList.toggle("active", state.sound);
+          document
+            .getElementById("focus-toggle")
+            .classList.toggle("active", state.focus);
+          document.getElementById("mode-label").innerText =
+            state.mode === "timed" ? "Timed (60s)" : "Unlimited";
+        }
+      }
+
+      // new logics
+
+      function getValidWords() {
+        return WORDS.filter((word) =>
+          word.split("").every((c) => state.activeKeys.includes(c)),
+        );
+      }
+
+      function weightedPick(obj) {
+        const entries = Object.entries(obj);
+        const total = entries.reduce((sum, [, val]) => sum + val, 0);
+
+        let rand = Math.random() * total;
+
+        for (let [char, weight] of entries) {
+          rand -= weight;
+          if (rand <= 0) return char;
+        }
+
+        return entries[0][0]; // fallback
+      }
+
+      function generateWordFromTrigram() {
+        let len = 3 + Math.floor(Math.random() * 5);
+
+        // start with 2 valid chars
+        let prev2 =
+          state.activeKeys[
+            Math.floor(Math.random() * state.activeKeys.length)
+          ] +
+          state.activeKeys[Math.floor(Math.random() * state.activeKeys.length)];
+
+        let word = prev2;
+
+        for (let i = 2; i < len; i++) {
+          let nextChar;
+
+          if (TRIGRAMS[prev2]) {
+            const filtered = Object.fromEntries(
+              Object.entries(TRIGRAMS[prev2]).filter(([char]) =>
+                state.activeKeys.includes(char),
+              ),
+            );
+
+            if (Object.keys(filtered).length > 0) {
+              nextChar = weightedPick(filtered);
+            } else {
+              nextChar = randomActiveKey();
+            }
+          } else {
+            // fallback to random allowed key
+            nextChar =
+              state.activeKeys[
+                Math.floor(Math.random() * state.activeKeys.length)
+              ];
+          }
+
+          word += nextChar;
+          prev2 = prev2[1] + nextChar;
+        }
+
+        return word;
+      }
+
+      function randomActiveKey() {
+        if (!state.activeKeys || state.activeKeys.length === 0) return "a";
+        return state.activeKeys[
+          Math.floor(Math.random() * state.activeKeys.length)
+        ];
+      }
+
+      window.onload = init;
+    </script>
+  </body>
+</html>
