@@ -474,6 +474,43 @@
         osc.stop(AudioCtx.currentTime + 0.1);
       }
 
+      const meld = [
+        261.63, 293.66, 329.63, 349.23, 392.0, 440.0, 493.88, 522.66, 587.32,
+        659.26, 698.46, 784.0, 880.0,
+      ];
+
+      function playChord() {
+        if (!state.sound) return;
+        if (!AudioCtx)
+          AudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        // Pick a random starting note index
+        const rootIndex = Math.floor(Math.random() * (meld.length - 5));
+
+        // A basic triad is often the 1st, 3rd, and 5th notes of a scale
+        const chordIndices = [rootIndex, rootIndex + 2, rootIndex + 4];
+
+        chordIndices.forEach((index) => {
+          const osc = AudioCtx.createOscillator();
+          const gain = AudioCtx.createGain();
+
+          osc.frequency.setValueAtTime(meld[index], AudioCtx.currentTime);
+          osc.type = "sine";
+
+          gain.gain.setValueAtTime(0.2, AudioCtx.currentTime); // Lower volume so 3 notes don't distort
+          gain.gain.exponentialRampToValueAtTime(
+            0.001,
+            AudioCtx.currentTime + 0.5,
+          );
+
+          osc.connect(gain);
+          gain.connect(AudioCtx.destination);
+
+          osc.start();
+          osc.stop(AudioCtx.currentTime + 0.5);
+        });
+      }
+
       function generateText() {
         let result = [];
         let validWords = getValidWords();
@@ -607,7 +644,7 @@
         }
         state.lastInteraction = Date.now();
         state.typedChars = input.value;
-        playClick();
+        playChord();
 
         const chars = document.querySelectorAll(".char");
         chars.forEach((span, i) => {
