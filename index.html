@@ -540,7 +540,7 @@
                     (key) => `
                     <div class="key-btn ${state.activeKeys.includes(key) ? "selected" : ""}" 
                          data-key="${key}" onclick="toggleKey('${key}')">
-                        ${key === "," ? "<" : key === "." ? ">" : key}
+                        ${key === "," ? "," : key === "." ? "." : key}
                     </div>
                 `,
                   )
@@ -881,14 +881,29 @@
       }
 
       function generateWordFromTrigram() {
-        let len = 3 + Math.floor(Math.random() * 5);
+        let len = 3 + Math.floor(Math.random() * 4);
 
         // start with 2 valid chars
-        let prev2 =
-          state.activeKeys[
-            Math.floor(Math.random() * state.activeKeys.length)
-          ] +
-          state.activeKeys[Math.floor(Math.random() * state.activeKeys.length)];
+        let prev2;
+
+        // Create a Set for faster lookup
+        const charSet = new Set(state.activeKeys);
+
+        const filteredKeys = Object.keys(TRIGRAMS).filter((key) =>
+          key.split("").every((char) => charSet.has(char)),
+        );
+
+        if (filteredKeys.length > 0) {
+          prev2 = filteredKeys[Math.floor(Math.random() * filteredKeys.length)];
+        } else {
+          prev2 =
+            state.activeKeys[
+              Math.floor(Math.random() * state.activeKeys.length)
+            ] +
+            state.activeKeys[
+              Math.floor(Math.random() * state.activeKeys.length)
+            ];
+        }
 
         let word = prev2;
 
